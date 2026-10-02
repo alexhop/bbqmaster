@@ -1,0 +1,9 @@
+# Site-specific WiFi credentials and server address
+src/secrets.h
+
+# PlatformIO build output
+.pio/
+
+# Editor / OS
+.vscode/
+.DS_Store
