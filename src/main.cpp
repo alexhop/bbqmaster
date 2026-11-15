@@ -14,6 +14,9 @@
  *   - Every POST_INTERVAL_SEC: POST cached probe data to the server
  *   - Every AMBIENT_INTERVAL_SEC: read BME sensor, POST ambient data
  *   - Every OTA_CHECK_INTERVAL_SEC: check for firmware updates
+ *   - A background task watches the CPU temperature: it turns the
+ *     camera off when the chip runs hot and deep-sleeps to cool down
+ *     if that isn't enough (see thermal.h)
  *
  * BLE Protocol: Combustion vendor ID 0x09C7, 8×13-bit thermistors
  * See: https://github.com/combustion-inc/combustion-documentation
@@ -31,6 +34,7 @@
 #endif
 #include "network.h"
 #include "ota.h"
+#include "thermal.h"
 
 // ─── Globals ─────────────────────────────────────────────
 
@@ -164,6 +168,11 @@ void setup() {
     Serial.printf("  Firmware: v%s (build %d)\n", FW_VERSION, BUILD_NUMBER);
     Serial.printf("  PSRAM:    %d KB\n", ESP.getPsramSize() / 1024);
     Serial.println();
+
+    // ── Thermal guard first: if we are waking from a thermal shutdown
+    //    and the chip is still hot, this goes back to sleep before the
+    //    radios or camera get a chance to add heat ──
+    thermalInit();
 
     // ── Connect WiFi first (must happen before camera on S3) ──
     Serial.println("[main] Connecting WiFi...");

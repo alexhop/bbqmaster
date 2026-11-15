@@ -1,5 +1,6 @@
 #include "camera.h"
 #include "config.h"
+#include "thermal.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -24,6 +25,7 @@ static void cameraNoteActivity() {
 // Returns true if the camera is ready, false on wake failure.
 static bool cameraWake() {
     if (!cameraSleeping) return true;
+    if (!thermalCameraAllowed()) return false;
 
     Serial.println("[camera] Waking from sleep...");
     if (!cameraInit()) {
@@ -47,9 +49,15 @@ bool cameraIsAsleep() { return cameraSleeping; }
 
 void cameraMaybeSleep() {
     if (cameraSleeping) return;
-    if (millis() - lastCameraRequestMs < CAMERA_SLEEP_TIMEOUT_MS) return;
 
-    Serial.println("[camera] No viewers — sleeping to save power");
+    // Thermal throttling powers the camera down straight away, viewers
+    // or not. handleStream() has already dropped its client by the time
+    // the main loop gets here.
+    bool tooHot = !thermalCameraAllowed();
+    if (!tooHot && millis() - lastCameraRequestMs < CAMERA_SLEEP_TIMEOUT_MS) return;
+
+    Serial.println(tooHot ? "[camera] CPU too hot — camera powered down"
+                          : "[camera] No viewers — sleeping to save power");
     esp_err_t err = esp_camera_deinit();
     if (err != ESP_OK) {
         Serial.printf("[camera] esp_camera_deinit failed: 0x%x\n", err);
@@ -141,9 +149,21 @@ bool cameraInit() {
 
 static const char* STREAM_BOUNDARY = "bbqmastercamframe";
 
+static const char* TOO_HOT_MSG = "Camera paused: CPU too hot";
+
 static void handleStream() {
     WiFiClient client = streamServer.client();
     if (!client) return;
+
+    if (!thermalCameraAllowed()) {
+        client.print(
+            "HTTP/1.0 503 Service Unavailable\r\n"
+            "Content-Type: text/plain\r\n\r\n");
+        client.print(TOO_HOT_MSG);
+        client.print("\r\n");
+        client.stop();
+        return;
+    }
 
     cameraNoteActivity();
     if (!cameraWake()) {
@@ -173,6 +193,13 @@ static void handleStream() {
         // yank the driver out from under us on the next main-loop
         // iteration.
         cameraNoteActivity();
+
+        // This loop blocks the main loop for as long as someone is
+        // watching, so it has to notice thermal throttling itself.
+        if (!thermalCameraAllowed()) {
+            Serial.println("[camera] CPU too hot — ending stream");
+            break;
+        }
 
         camera_fb_t* fb = esp_camera_fb_get();
         if (!fb) {
@@ -207,6 +234,11 @@ static void handleStream() {
 // ─── Snapshot Handler ────────────────────────────────────
 
 static void handleSnapshot() {
+    if (!thermalCameraAllowed()) {
+        streamServer.send(503, "text/plain", TOO_HOT_MSG);
+        return;
+    }
+
     cameraNoteActivity();
     if (!cameraWake()) {
         streamServer.send(503, "text/plain", "Camera wake failed");

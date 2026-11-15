@@ -110,6 +110,32 @@
 #define BATTERY_FULL_V             4.20f     // LiPo nominal full charge
 #define BATTERY_EMPTY_V            3.30f     // BQ25100 cutoff is ~3.0V; use 3.3V as "empty" for UX
 
+// ─── CPU thermal protection ──────────────────────────────
+// All temperatures are the chip's own die temperature in °C, read
+// from its built-in sensor (roughly ±2°C). The die runs well above
+// the surrounding air, more so with the camera streaming. See
+// thermal.h for what each stage does.
+//
+// These are starting values, not measured on a real unit. Watch
+// cpuTempC in the heartbeat on a normal cook and adjust.
+#ifndef THERMAL_THROTTLE_C
+#define THERMAL_THROTTLE_C         80    // Camera off, CPU clock lowered
+#endif
+#ifndef THERMAL_THROTTLE_CLEAR_C
+#define THERMAL_THROTTLE_CLEAR_C   70    // Back to normal at or below this
+#endif
+#ifndef THERMAL_SHUTDOWN_C
+#define THERMAL_SHUTDOWN_C         95    // Deep sleep to cool down
+#endif
+#ifndef THERMAL_RESUME_C
+#define THERMAL_RESUME_C           75    // Stay asleep until below this
+#endif
+#define THERMAL_COOLDOWN_SEC       300   // Length of each cooldown sleep
+#define THERMAL_CHECK_INTERVAL_MS  2000  // How often the die is sampled
+#define THERMAL_SHUTDOWN_SAMPLES   3     // Readings in a row needed to shut down
+#define THERMAL_SENSOR_FAIL_LIMIT  5     // Failed reads in a row before warning
+#define THERMAL_THROTTLED_CPU_MHZ  80    // Lowest clock that keeps WiFi and BLE up
+
 // ─── Timing ───────────────────────────────────────────────
 #define POST_INTERVAL_SEC          3     // Probe data POST interval
 #define AMBIENT_INTERVAL_SEC       30    // BME sensor read interval
