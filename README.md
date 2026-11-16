@@ -103,6 +103,9 @@ with `build_flags` in `platformio.ini`; give each unit its own.
 | `CAMERA_SLEEP_TIMEOUT_MS` | `30000` | Camera is powered down after this long with no viewers |
 | `CAM_FRAME_SIZE` / `CAM_JPEG_QUALITY` | VGA / `12` | Camera resolution and JPEG quality |
 | `BATTERY_DIVIDER_RATIO` | `2.0f` | Battery divider ratio |
+| `THERMAL_THROTTLE_C` / `THERMAL_THROTTLE_CLEAR_C` | `80` / `70` | CPU temperature (°C) at which the camera is turned off, and at which it is allowed back |
+| `THERMAL_SHUTDOWN_C` / `THERMAL_RESUME_C` | `95` / `75` | CPU temperature (°C) at which the device sleeps to cool down, and below which it starts up again |
+| `THERMAL_COOLDOWN_SEC` | `300` | Length of each cooldown sleep |
 | `VERBOSE_LOG` | `true` | Print payloads on serial |
 
 ## How It Works
@@ -136,6 +139,26 @@ The S3 Sense build runs a small web server on port 80:
 
 The camera is powered down after 30 seconds without a viewer and wakes on the
 next request, which adds roughly half a second to the first frame.
+
+### Overheat protection
+
+The firmware reads the chip's built-in temperature sensor every 2 seconds
+from a background task, so the check keeps running while a camera stream or a
+slow network request is blocking everything else.
+
+| CPU temperature | What happens |
+|-----------------|--------------|
+| 80 °C and above | Throttled. The camera is powered down, `/stream` and `/snapshot` answer `503`, and the CPU clock drops to 80 MHz. Probe and ambient readings carry on. Normal operation returns at 70 °C. |
+| 95 °C and above, three readings in a row | Shutdown. The device deep-sleeps for 5 minutes and reboots. If the chip is still above 75 °C it sleeps another 5 minutes, and so on. Nothing is reported while it sleeps. |
+
+The temperatures are the chip's own, which run well above the surrounding
+air. The defaults have not been measured against a real unit: watch `cpuTempC`
+in the heartbeat during a normal cook and adjust them in `src/config.h` or
+with `-D` build flags.
+
+This limits the heat the board makes itself. It cannot cool a board that is
+mounted somewhere hotter than the chip can stand; all it can do there is stay
+asleep.
 
 ## Server API
 
@@ -195,12 +218,20 @@ Every 30 seconds. The firmware expects `200`.
   "uptimeSeconds": 3600,
   "sensorsOnline": 2,
   "batteryVoltage": 3.95,
-  "batteryPercent": 72
+  "batteryPercent": 72,
+  "cpuTempC": 61.5,
+  "thermalState": "ok",
+  "thermalShutdowns": 0
 }
 ```
 
 `sensorsOnline` is the number of probes seen plus one if a BME sensor is
 present. The battery fields are omitted when no divider is fitted.
+
+`thermalState` is `ok` or `throttled`. `thermalShutdowns` counts overheat
+shutdowns since the device was last powered on or reset. `cpuTempC` is omitted
+if the on-chip sensor cannot be read, in which case overheat protection is not
+working.
 
 ### `GET /api/firmware/check?deviceId=<id>&currentBuild=<n>`
 
@@ -252,6 +283,7 @@ the device or the server endpoints to the internet.
     |-- camera.cpp/.h         OV2640 init, MJPEG stream and snapshot server
     |-- bme_sensor.cpp/.h     BME280 / BME680 / BME688 auto-detection and reads
     |-- battery.cpp/.h        Battery voltage from the optional divider
+    |-- thermal.cpp/.h        CPU overheat protection (throttle, cooldown sleep)
     |-- network.cpp/.h        WiFi, mDNS, JSON payloads, HTTP POST
     +-- ota.cpp/.h            Pull-based firmware update
 ```

@@ -1,8 +1,10 @@
 #include "network.h"
 #include "battery.h"
 #include "config.h"
+#include "thermal.h"
 
 #include <Arduino.h>
+#include <math.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ESPmDNS.h>
@@ -284,6 +286,19 @@ bool networkHeartbeat(int probeCount, int sensorsOnline, bool hasCamera) {
             ",\"batteryPercent\":%d",
             battery.voltage, battery.percent), sizeof(payload));
     }
+
+    // CPU die temperature and thermal protection status. cpuTempC is
+    // omitted when the on-chip sensor can't be read.
+    float cpuTempC = thermalCpuTempC();
+    if (!isnan(cpuTempC)) {
+        advancePos(pos, snprintf(payload + pos, sizeof(payload) - pos,
+            ",\"cpuTempC\":%.1f", cpuTempC), sizeof(payload));
+    }
+    advancePos(pos, snprintf(payload + pos, sizeof(payload) - pos,
+        ",\"thermalState\":\"%s\""
+        ",\"thermalShutdowns\":%lu",
+        thermalStateName(),
+        (unsigned long)thermalShutdownCount()), sizeof(payload));
 
     if (pos >= (int)sizeof(payload) - 1) pos = sizeof(payload) - 2;
     payload[pos++] = '}';
