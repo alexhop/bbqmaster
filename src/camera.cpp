@@ -250,6 +250,17 @@ static void handleStream() {
 
 // ─── Snapshot Handler ────────────────────────────────────
 
+// Go back to the stream frame size after a full-resolution snapshot,
+// and empty the frame buffers. Otherwise the next stream viewer's
+// first frame is a leftover full-resolution one.
+static void restoreStreamSize(sensor_t* s) {
+    s->set_framesize(s, CAM_FRAME_SIZE);
+    for (int i = 0; i < CAM_FB_COUNT; i++) {
+        camera_fb_t* stale = esp_camera_fb_get();
+        if (stale) esp_camera_fb_return(stale);
+    }
+}
+
 static void handleSnapshot() {
     if (!thermalCameraAllowed()) {
         streamServer.send(503, "text/plain", TOO_HOT_MSG);
@@ -280,7 +291,7 @@ static void handleSnapshot() {
 
     camera_fb_t* fb = esp_camera_fb_get();
     if (!fb) {
-        if (switched) s->set_framesize(s, CAM_FRAME_SIZE);
+        if (switched) restoreStreamSize(s);
         streamServer.send(500, "text/plain", "Camera capture failed");
         return;
     }
@@ -291,7 +302,7 @@ static void handleSnapshot() {
     streamServer.send_P(200, "image/jpeg", (const char*)fb->buf, fb->len);
     esp_camera_fb_return(fb);
 
-    if (switched) s->set_framesize(s, CAM_FRAME_SIZE);
+    if (switched) restoreStreamSize(s);
 }
 
 // ─── Start Server ────────────────────────────────────────

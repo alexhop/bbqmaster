@@ -135,7 +135,7 @@ The S3 Sense build runs a small web server on port 80:
 |------|---------|
 | `/` | A page that shows the live stream |
 | `/stream` | MJPEG stream, up to about 15 frames per second at 640x480 |
-| `/snapshot` | A single JPEG at the sensor's full resolution (1600x1200 for an OV2640), whatever the stream size |
+| `/snapshot` | A single JPEG at the sensor's full resolution, whatever the stream size: 2048x1536 for an OV3660, 1600x1200 for an OV2640. Takes about 2 seconds |
 
 The camera is powered down after 30 seconds without a viewer and wakes on the
 next request, which adds roughly half a second to the first frame.
