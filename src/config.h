@@ -2,8 +2,8 @@
 #define CONFIG_H
 
 // ─── Build ───────────────────────────────────────────────────
-#define BUILD_NUMBER    5
-#define FW_VERSION      "0.5.1"
+#define BUILD_NUMBER    6
+#define FW_VERSION      "0.6.0"
 
 // ─── Device Identity ───────────────────────────────────────
 #ifndef DEVICE_ID
@@ -73,9 +73,10 @@
 #define CAM_PIN_PCLK    13
 
 // Camera settings
-#define CAM_FRAME_SIZE   FRAMESIZE_VGA    // 640x480
+#define CAM_FRAME_SIZE   FRAMESIZE_VGA    // Stream size, 640x480. Snapshots use the sensor maximum.
 #define CAM_JPEG_QUALITY 12               // 0-63, lower = better quality
 #define CAM_FB_COUNT     2                // Frame buffers (PSRAM)
+#define CAM_SNAPSHOT_SETTLE_FRAMES 3      // Frames discarded after switching to full resolution
 
 // Camera HTTP server port. Port 80 is the standard HTTP port so
 // users can type `http://bbqmaster.local` without a port suffix.

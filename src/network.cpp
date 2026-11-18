@@ -19,6 +19,28 @@ static void advancePos(int& pos, int written, int bufSize) {
     }
 }
 
+// Build the camera URLs from our current IP so the server and its
+// dashboard can reach the stream and snapshot endpoints.
+//
+// Omit the ":80" suffix when running on the default HTTP port —
+// both forms are valid but http://192.168.1.50/stream is
+// cleaner in the UI than http://192.168.1.50:80/stream.
+static void buildCameraUrls(char* streamUrl, size_t streamLen,
+                            char* snapshotUrl, size_t snapshotLen) {
+    IPAddress ip = WiFi.localIP();
+#if CAM_STREAM_PORT == 80
+    snprintf(streamUrl, streamLen, "http://%u.%u.%u.%u/stream",
+             ip[0], ip[1], ip[2], ip[3]);
+    snprintf(snapshotUrl, snapshotLen, "http://%u.%u.%u.%u/snapshot",
+             ip[0], ip[1], ip[2], ip[3]);
+#else
+    snprintf(streamUrl, streamLen, "http://%u.%u.%u.%u:%d/stream",
+             ip[0], ip[1], ip[2], ip[3], CAM_STREAM_PORT);
+    snprintf(snapshotUrl, snapshotLen, "http://%u.%u.%u.%u:%d/snapshot",
+             ip[0], ip[1], ip[2], ip[3], CAM_STREAM_PORT);
+#endif
+}
+
 // ─── WiFi ─────────────────────────────────────────────────
 
 bool networkConnect() {
@@ -100,32 +122,12 @@ bool networkPostProbe(const CombustionProbeData& probe) {
         t[i] = cToF(probe.temperatures[i]);
     }
 
-    // Build camera URLs from our current IP so the dashboard can
-    // embed the live stream. probeSlot is 1-8 (the user-assignable
-    // probe ID from the Combustion app), making it easy for the UI
-    // to show "Probe 2" instead of the serial hash.
-    //
-    // Omit the ":80" suffix when running on the default HTTP port —
-    // both forms are valid but http://192.168.1.50/stream is
-    // cleaner in the UI than http://192.168.1.50:80/stream.
-    IPAddress ip = WiFi.localIP();
+    // probeSlot is 1-8 (the user-assignable probe ID from the
+    // Combustion app), making it easy for the UI to show "Probe 2"
+    // instead of the serial hash.
     char streamUrl[64];
     char snapshotUrl[64];
-#if CAM_STREAM_PORT == 80
-    snprintf(streamUrl, sizeof(streamUrl),
-             "http://%u.%u.%u.%u/stream",
-             ip[0], ip[1], ip[2], ip[3]);
-    snprintf(snapshotUrl, sizeof(snapshotUrl),
-             "http://%u.%u.%u.%u/snapshot",
-             ip[0], ip[1], ip[2], ip[3]);
-#else
-    snprintf(streamUrl, sizeof(streamUrl),
-             "http://%u.%u.%u.%u:%d/stream",
-             ip[0], ip[1], ip[2], ip[3], CAM_STREAM_PORT);
-    snprintf(snapshotUrl, sizeof(snapshotUrl),
-             "http://%u.%u.%u.%u:%d/snapshot",
-             ip[0], ip[1], ip[2], ip[3], CAM_STREAM_PORT);
-#endif
+    buildCameraUrls(streamUrl, sizeof(streamUrl), snapshotUrl, sizeof(snapshotUrl));
 
     char payload[1024];
     snprintf(payload, sizeof(payload),
@@ -285,6 +287,18 @@ bool networkHeartbeat(int probeCount, int sensorsOnline, bool hasCamera) {
             ",\"batteryVoltage\":%.2f"
             ",\"batteryPercent\":%d",
             battery.voltage, battery.percent), sizeof(payload));
+    }
+
+    // Where the camera is, so the server can fetch snapshots from it
+    // without waiting for a probe reading to carry the URLs.
+    if (hasCamera) {
+        char streamUrl[64];
+        char snapshotUrl[64];
+        buildCameraUrls(streamUrl, sizeof(streamUrl), snapshotUrl, sizeof(snapshotUrl));
+        advancePos(pos, snprintf(payload + pos, sizeof(payload) - pos,
+            ",\"streamUrl\":\"%s\""
+            ",\"snapshotUrl\":\"%s\"",
+            streamUrl, snapshotUrl), sizeof(payload));
     }
 
     // CPU die temperature and thermal protection status. cpuTempC is

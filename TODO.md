@@ -17,7 +17,6 @@
 - [ ] Periodic snapshot upload: `CAM_SNAPSHOT_INTERVAL_SEC`,
       `cameraCaptureJpeg()` and `cameraReleaseFrame()` exist but nothing calls
       them
-- [ ] `networkHeartbeat()` takes a `hasCamera` argument that is not sent
 - [ ] Only the probe advertisement format is parsed; Combustion's other
       products (display, booster, gauge) are ignored
 

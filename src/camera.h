@@ -9,8 +9,9 @@
 bool cameraInit();
 
 // Start the MJPEG HTTP stream server on CAM_STREAM_PORT.
-// Clients connect to http://<device-ip>/stream for live video
-// and http://<device-ip>/snapshot for a single JPEG frame.
+// Clients connect to http://<device-ip>/stream for live video at
+// CAM_FRAME_SIZE and http://<device-ip>/snapshot for a single JPEG
+// frame at the sensor's full resolution.
 void cameraStartServer();
 
 // Must be called from loop() to handle incoming stream/snapshot requests.
