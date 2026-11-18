@@ -17,8 +17,9 @@
 - [ ] Periodic snapshot upload: `CAM_SNAPSHOT_INTERVAL_SEC`,
       `cameraCaptureJpeg()` and `cameraReleaseFrame()` exist but nothing calls
       them
-- [ ] Only the probe advertisement format is parsed; Combustion's other
-      products (display, booster, gauge) are ignored
+- [ ] Only probe data is read (from a probe, or repeated by another MeatNet
+      device). The Gauge's, Display's and Booster's own advertisements are
+      dropped rather than reported
 
 ## Housekeeping
 

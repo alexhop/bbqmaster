@@ -13,13 +13,17 @@
 // Vendor ID: 0x09C7
 // Manufacturer data: 25 bytes
 
-// Product types
+// Product types, from the "Product Type" section of Combustion's
+// MeatNet Node BLE specification. Only PROBE and NODE advertisements
+// carry probe temperatures in the layout this parser reads.
 enum CombustionProduct : uint8_t {
-    PRODUCT_PROBE    = 0,
-    PRODUCT_NODE     = 1,
-    PRODUCT_DISPLAY  = 2,
-    PRODUCT_BOOSTER  = 3,
-    PRODUCT_GAUGE    = 4,
+    PRODUCT_UNKNOWN  = 0,
+    PRODUCT_PROBE    = 1,   // Predictive Probe
+    PRODUCT_NODE     = 2,   // A MeatNet device repeating a probe's data
+    PRODUCT_GAUGE    = 3,   // Giant Grill Gauge
+    PRODUCT_DISPLAY  = 4,   // Display (Timer)
+    PRODUCT_BOOSTER  = 5,   // Booster (Charger)
+    PRODUCT_ENGINE   = 6,
 };
 
 // Probe mode
