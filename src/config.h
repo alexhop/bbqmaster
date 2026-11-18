@@ -2,8 +2,8 @@
 #define CONFIG_H
 
 // ─── Build ───────────────────────────────────────────────────
-#define BUILD_NUMBER    6
-#define FW_VERSION      "0.6.0"
+#define BUILD_NUMBER    7
+#define FW_VERSION      "0.6.1"
 
 // ─── Device Identity ───────────────────────────────────────
 #ifndef DEVICE_ID

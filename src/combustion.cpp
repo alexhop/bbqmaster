@@ -52,19 +52,28 @@ CombustionProbeData parseCombustionAdv(const uint8_t* data, size_t len, int rssi
 
     // Byte 0 (of payload): Product type.
     //
-    // The earlier PRODUCT_PROBE = 0 constant came from a stale version
-    // of the spec. Current probe firmware observed in the field sends
-    // product type = 0x01. We no longer gate parsing on the value;
-    // only the Node (relay) format requires a different parser, and
-    // the Node packet has a distinctly different payload layout that
-    // we don't handle here. Record the byte and continue.
+    // Every Combustion product advertises under the same vendor ID, but
+    // only two types use the probe layout parsed below: a probe itself,
+    // and a MeatNet device (Display, Booster, Gauge) repeating a probe's
+    // data. Those devices interleave that with advertisements about
+    // themselves, which are laid out differently: a Gauge, for one, puts
+    // a 10-character text serial where the probe's serial and
+    // temperatures go. Read as a probe, that shows up as a bogus probe
+    // with nonsense temperatures, so everything else is dropped here.
     result.productType = payload[0];
+    if (result.productType != PRODUCT_PROBE && result.productType != PRODUCT_NODE) {
+        return result;
+    }
 
     // Bytes 1-4: Serial number (little-endian)
     result.serialNumber = (uint32_t)payload[1]
                         | ((uint32_t)payload[2] << 8)
                         | ((uint32_t)payload[3] << 16)
                         | ((uint32_t)payload[4] << 24);
+
+    // A repeater with no probe to report sends an empty slot: serial
+    // zero and all-zero temperatures. That is not a probe either.
+    if (result.serialNumber == 0) return result;
 
     // Bytes 5-17: Raw temperature data (13 bytes = 104 bits = 8 × 13-bit values)
     const uint8_t* tempData = payload + 5;
