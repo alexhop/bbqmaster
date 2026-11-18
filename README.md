@@ -101,7 +101,7 @@ with `build_flags` in `platformio.ini`; give each unit its own.
 | `OTA_CHECK_INTERVAL_SEC` | `60` | Firmware update check interval |
 | `CAM_STREAM_PORT` | `80` | Port of the on-device camera web server |
 | `CAMERA_SLEEP_TIMEOUT_MS` | `30000` | Camera is powered down after this long with no viewers |
-| `CAM_FRAME_SIZE` / `CAM_JPEG_QUALITY` | VGA / `12` | Camera resolution and JPEG quality |
+| `CAM_FRAME_SIZE` / `CAM_JPEG_QUALITY` | VGA / `12` | Stream resolution and JPEG quality. Snapshots always use the sensor maximum |
 | `BATTERY_DIVIDER_RATIO` | `2.0f` | Battery divider ratio |
 | `THERMAL_THROTTLE_C` / `THERMAL_THROTTLE_CLEAR_C` | `80` / `70` | CPU temperature (°C) at which the camera is turned off, and at which it is allowed back |
 | `THERMAL_SHUTDOWN_C` / `THERMAL_RESUME_C` | `95` / `75` | CPU temperature (°C) at which the device sleeps to cool down, and below which it starts up again |
@@ -135,10 +135,13 @@ The S3 Sense build runs a small web server on port 80:
 |------|---------|
 | `/` | A page that shows the live stream |
 | `/stream` | MJPEG stream, up to about 15 frames per second at 640x480 |
-| `/snapshot` | A single JPEG |
+| `/snapshot` | A single JPEG at the sensor's full resolution (1600x1200 for an OV2640), whatever the stream size |
 
 The camera is powered down after 30 seconds without a viewer and wakes on the
 next request, which adds roughly half a second to the first frame.
+
+The web server handles one request at a time, so `/snapshot` is not answered
+while someone is watching `/stream`.
 
 ### Overheat protection
 
@@ -221,12 +224,17 @@ Every 30 seconds. The firmware expects `200`.
   "batteryPercent": 72,
   "cpuTempC": 61.5,
   "thermalState": "ok",
-  "thermalShutdowns": 0
+  "thermalShutdowns": 0,
+  "streamUrl": "http://192.168.1.50/stream",
+  "snapshotUrl": "http://192.168.1.50/snapshot"
 }
 ```
 
 `sensorsOnline` is the number of probes seen plus one if a BME sensor is
 present. The battery fields are omitted when no divider is fitted.
+
+`streamUrl` and `snapshotUrl` are sent only by builds with a working camera,
+so a server can fetch snapshots without waiting for a probe reading.
 
 `thermalState` is `ok` or `throttled`. `thermalShutdowns` counts overheat
 shutdowns since the device was last powered on or reset. `cpuTempC` is omitted

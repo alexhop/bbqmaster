@@ -15,6 +15,10 @@ static camera_fb_t* currentFb = nullptr;
 static unsigned long lastCameraRequestMs = 0;
 static bool cameraSleeping = false;
 
+// Largest frame size the fitted sensor supports, found at init. The
+// stream runs at CAM_FRAME_SIZE; /snapshot switches up to this.
+static framesize_t maxFrameSize = CAM_FRAME_SIZE;
+
 // Bump the "last active" timestamp so cameraMaybeSleep() holds off.
 static void cameraNoteActivity() {
     lastCameraRequestMs = millis();
@@ -96,7 +100,12 @@ bool cameraInit() {
 
     // Use PSRAM for frame buffers (S3 Sense has 8MB)
     if (psramFound()) {
-        config.frame_size   = CAM_FRAME_SIZE;
+        // Ask for the largest size the driver knows. It clamps that to
+        // what the sensor can do and sizes the frame buffers to match,
+        // which is what lets /snapshot capture at full resolution. A
+        // frame size can be lowered after init but never raised past
+        // the size the buffers were allocated for.
+        config.frame_size   = (framesize_t)(FRAMESIZE_INVALID - 1);
         config.jpeg_quality = CAM_JPEG_QUALITY;
         config.fb_count     = CAM_FB_COUNT;
         config.fb_location  = CAMERA_FB_IN_PSRAM;
@@ -119,6 +128,14 @@ bool cameraInit() {
     // Adjust sensor settings for outdoor use
     sensor_t* s = esp_camera_sensor_get();
     if (s) {
+        // The driver has clamped the frame size to the sensor's maximum.
+        // Remember it for snapshots, then drop to the stream size.
+        maxFrameSize = s->status.framesize;
+        Serial.printf("[camera] Sensor maximum %ux%u\n",
+                      resolution[maxFrameSize].width, resolution[maxFrameSize].height);
+        if (maxFrameSize > CAM_FRAME_SIZE) {
+            s->set_framesize(s, CAM_FRAME_SIZE);
+        }
         s->set_brightness(s, 0);
         s->set_contrast(s, 0);
         s->set_saturation(s, 0);
@@ -129,7 +146,7 @@ bool cameraInit() {
         s->set_gain_ctrl(s, 1);    // Auto gain
     }
 
-    Serial.println("[camera] OV2640 initialized");
+    Serial.println("[camera] Camera initialized");
     return true;
 }
 
@@ -245,15 +262,36 @@ static void handleSnapshot() {
         return;
     }
 
+    // Snapshots are taken at the sensor's full resolution. Switch up,
+    // throw away the frames captured while the sensor was changing size
+    // and its exposure was settling, take one, and switch back so the
+    // stream keeps its smaller, faster frames.
+    sensor_t* s = esp_camera_sensor_get();
+    bool switched = false;
+    if (s && maxFrameSize > CAM_FRAME_SIZE) {
+        switched = s->set_framesize(s, maxFrameSize) == 0;
+        if (switched) {
+            for (int i = 0; i < CAM_SNAPSHOT_SETTLE_FRAMES; i++) {
+                camera_fb_t* skip = esp_camera_fb_get();
+                if (skip) esp_camera_fb_return(skip);
+            }
+        }
+    }
+
     camera_fb_t* fb = esp_camera_fb_get();
     if (!fb) {
+        if (switched) s->set_framesize(s, CAM_FRAME_SIZE);
         streamServer.send(500, "text/plain", "Camera capture failed");
         return;
     }
 
+    Serial.printf("[camera] Snapshot %ux%u, %u bytes\n",
+                  (unsigned)fb->width, (unsigned)fb->height, (unsigned)fb->len);
     streamServer.sendHeader("Content-Disposition", "inline; filename=snapshot.jpg");
     streamServer.send_P(200, "image/jpeg", (const char*)fb->buf, fb->len);
     esp_camera_fb_return(fb);
+
+    if (switched) s->set_framesize(s, CAM_FRAME_SIZE);
 }
 
 // ─── Start Server ────────────────────────────────────────
